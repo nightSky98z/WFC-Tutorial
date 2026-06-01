@@ -419,9 +419,6 @@ public class WaveFunction : MonoBehaviour
     /// <returns>
     /// 選ばれたセル index。なければ -1。
     /// </returns>
-    /// <remarks>
-    /// Unity object に触らないのでテストしやすい関数です。
-    /// </remarks>
     static int FindLowestEntropyCell(NativeArray<ulong> optionMasks, NativeArray<byte> collapsedFlags, int tieBreakSeed, out bool foundContradiction)
     {
         int bestIndex = -1;
