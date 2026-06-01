@@ -1,0 +1,96 @@
+今のコードはもう Job 化の形まで来ているので、Burst はかなり小さい変更で入ります。
+
+まず package は `packages-lock.json` 上では `com.unity.burst` が入っています。`using Unity.Burst;` が compile できているなら OK。もし `Unity.Burst` が見つからないなら、Package Manager で **Burst** を install してください。
+
+変更箇所はここです。
+
+[WaveFunction.cs:254](/home/yoru98zzz/Work/UnityProject/WFC-Tutorial/Assets/Scripts/WaveFunction.cs:254) の Job struct に `[BurstCompile]` を付けます。
+
+```csharp
+[BurstCompile]
+private struct UpdateGenerationJob : IJobParallelFor
+{
+    ...
+}
+```
+
+初回実行時の非同期コンパイル待ちを避けたいなら、開発中だけこうしてもいいです。
+
+```csharp
+[BurstCompile(CompileSynchronously = true)]
+private struct UpdateGenerationJob : IJobParallelFor
+{
+    ...
+}
+```
+
+`NextOptions` は各 index に一度だけ書くので、意図を明示して `[WriteOnly]` を付けるとよいです。
+
+```csharp
+[WriteOnly] public NativeArray<ulong> NextOptions;
+```
+
+なので Job の先頭はこういう形です。
+
+```csharp
+[BurstCompile]
+private struct UpdateGenerationJob : IJobParallelFor
+{
+    [ReadOnly] public NativeArray<ulong> CurrentOptions;
+    [ReadOnly] public NativeArray<byte> Collapsed;
+    [ReadOnly] public NativeArray<ulong> UpMasks;
+    [ReadOnly] public NativeArray<ulong> RightMasks;
+    [ReadOnly] public NativeArray<ulong> DownMasks;
+    [ReadOnly] public NativeArray<ulong> LeftMasks;
+
+    [WriteOnly] public NativeArray<ulong> NextOptions;
+
+    public int Dimensions;
+    public int TileCount;
+    public ulong AllOptions;
+
+    ...
+}
+```
+
+Burst Job の中ではこれは OK です。
+
+```text
+OK:
+- int
+- byte
+- ulong
+- NativeArray<T>
+- bit 演算
+- private helper method
+```
+
+これは入れないでください。
+
+```text
+NG:
+- Tile
+- Cell
+- GameObject
+- Transform
+- Instantiate
+- Debug.Log
+- UnityEngine.Random
+- List<T>
+- managed array
+```
+
+今の `UpdateGenerationJob` はその条件を満たしているので、Burst 化に向いています。
+
+一点だけ安全のために、[Awake](/home/yoru98zzz/Work/UnityProject/WFC-Tutorial/Assets/Scripts/WaveFunction.cs:33) に tile 数チェックを入れるといいです。`ulong` mask は最大 64 bit なので、まずは 63 以下に制限するのが安全です。
+
+```csharp
+if (tileObjects.Length <= 0 || tileObjects.Length >= 64)
+{
+    Debug.LogError("tileObjects length must be 1..63 for ulong option masks.");
+    enabled = false;
+    return;
+}
+```
+
+最後に Unity Editor 側で **Jobs > Burst > Enable Compilation** が有効になっているか確認してください。Burst Inspector を開くと `UpdateGenerationJob` が Burst compile 対象になっているか確認できます。

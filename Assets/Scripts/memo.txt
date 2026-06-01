@@ -1,0 +1,89 @@
+並行処理できる本命は [UpdateGeneration()](WaveFunction.cs:94) の中です。
+
+特にこの範囲：
+
+```csharp
+for (int y = 0; y < dimensions; y++)
+{
+    for (int x = 0; x < dimensions; x++)
+    {
+        // 各 cell の tileOptions を隣接 cell から計算
+    }
+}
+```
+
+ここは「前世代の `gridComponents` を読む」「次世代の候補を書き込む」という形にすれば、各 cell を独立に計算できます。WFC 的にはここが一番 CPU 計算らしい場所です。
+
+ただし、今のままでは並列化しづらいです。理由は `Cell` と `Tile` が `MonoBehaviour` / `UnityEngine.Object` なので、worker thread / Job から安全に触れません。
+
+並行処理してよいもの：
+
+```text
+OK:
+- int index
+- bool collapsed
+- tile option の bit mask
+- 隣接可能 tile の bit mask
+- NativeArray<int>, NativeArray<ulong> などの純粋データ
+```
+
+並行処理してはいけないもの：
+
+```text
+NG:
+- Instantiate
+- Transform.position
+- Camera.transform
+- GameObject
+- MonoBehaviour
+- SpriteRenderer
+- Tile prefab 参照
+```
+
+なので今のコードで分けるなら：
+
+- [InitializeGrid の Instantiate](WaveFunction.cs:39): main thread のまま
+- [CollapseCell のランダム選択](WaveFunction.cs:80): main thread でよい
+- [CollapseCell の Instantiate](WaveFunction.cs:89): main thread 必須
+- [UpdateGeneration の候補計算](WaveFunction.cs:98): 並列化候補
+- [CheckEntropy の最小候補探し](WaveFunction.cs:50): 並列化可能だが、20x20 程度なら効果は薄い
+
+おすすめ構造はこうです。
+
+```text
+Tile prefab / Sprite / GameObject
+        ↓ main thread で一度だけ index 化
+tileAdjacencyMask[tileIndex][direction]
+
+cellOptionMask[cellIndex]
+collapsed[cellIndex]
+
+UpdateGeneration:
+  currentOptionMask を読む
+  nextOptionMask に書く
+  cell ごとに並列計算
+```
+
+tile 種類が 64 以下なら `ulong` bit mask がかなり相性いいです。
+
+```csharp
+// 例: tile 0, 2, 5 が候補なら
+ulong options = (1UL << 0) | (1UL << 2) | (1UL << 5);
+```
+
+隣接制約も `ulong` で持てば、候補更新は `AND` 中心になります。
+
+```csharp
+options &= validFromUp;
+options &= validFromRight;
+options &= validFromDown;
+options &= validFromLeft;
+```
+
+今の `IEnumerator CheckEntropy()` は「非同期っぽく見える」けど、CPU 並列ではありません。
+`yield return new WaitForSeconds(0.01f)` でメインスレッド処理をフレームに分けているだけです。
+見た目の生成アニメーションには良いですが、計算自体は並列化されていません。
+
+結論：  
+**並列化するなら `UpdateGeneration()` の各 cell の候補再計算。**  
+その前に `Cell` / `Tile` / `List<Tile>` ベースから、`int index` / `ulong optionMask` / 配列ベースへ分離するのが先です。
