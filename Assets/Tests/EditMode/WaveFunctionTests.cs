@@ -2,26 +2,16 @@ using NUnit.Framework;
 using UnityEngine;
 
 /// <summary>
-/// <see cref="WaveFunction"/> の設定境界と entropy 選択ロジックを固定する EditMode test。
+/// <see cref="WaveFunction"/> の重要な境界を確認する EditMode test。
 /// </summary>
 /// <remarks>
-/// Unity object を必要とする初期化境界は小さい GameObject を作って検証し、
-/// 純粋な候補選択ロジックは managed 配列から test helper を通して検証します。
-///
-/// 目的:
-/// - Inspector 設定ミスを実行前に止めること。
-/// - neighbor 参照のプロトコル違反を黙って無視しないこと。
-/// - 同 entropy の tie-break と contradiction 検出を再発防止すること。
+/// 設定ミス、entropy 選択、contradiction 検出を固定します。
 /// </remarks>
 public sealed class WaveFunctionTests
 {
     /// <summary>
-    /// dimensions が 0 の設定を実行前エラーとして扱うことを検証する。
+    /// dimensions が 0 なら生成を止める。
     /// </summary>
-    /// <remarks>
-    /// <see cref="WaveFunction"/> は <c>dimensions * dimensions</c> の配列を確保するため、
-    /// 0 以下を許すと空生成や後続 index error の原因になります。
-    /// </remarks>
     [Test]
     public void InvalidDimensionsDisableGeneration()
     {
@@ -45,12 +35,8 @@ public sealed class WaveFunctionTests
     }
 
     /// <summary>
-    /// neighbor 配列が <see cref="WaveFunction.tileObjects"/> 外の tile を参照した場合に生成を止めることを検証する。
+    /// 未登録 tile を neighbor に入れたら生成を止める。
     /// </summary>
-    /// <remarks>
-    /// 未登録 tile を黙って無視すると mask が欠け、WFC の制約が意図せず強くなります。
-    /// このテストは「設定ミスは初期化時に明示エラー」という境界を固定します。
-    /// </remarks>
     [Test]
     public void UnknownNeighbourReferenceDisablesGeneration()
     {
@@ -78,12 +64,8 @@ public sealed class WaveFunctionTests
     }
 
     /// <summary>
-    /// 同じ entropy のセルが複数ある場合、seed によって選択先が変わることを検証する。
+    /// 同じ entropy のセルは seed で選択先を変える。
     /// </summary>
-    /// <remarks>
-    /// 固定順で常に先頭セルを選ぶと、生成結果がグリッド index に偏ります。
-    /// このテストは tie-break 経路が存在することを確認します。
-    /// </remarks>
     [Test]
     public void LowestEntropyUsesTieBreakSeed()
     {
@@ -98,12 +80,8 @@ public sealed class WaveFunctionTests
     }
 
     /// <summary>
-    /// 候補数 0 の未 collapse セルを通常の低 entropy セルより先に報告することを検証する。
+    /// 候補 0 のセルを contradiction として先に返す。
     /// </summary>
-    /// <remarks>
-    /// 候補数 0 は「制約の結果、置ける tile がない」という contradiction です。
-    /// 通常の collapse 対象として扱わず、生成停止と診断に進める必要があります。
-    /// </remarks>
     [Test]
     public void ContradictionCellIsReportedBeforeNormalEntropyCell()
     {
@@ -122,11 +100,10 @@ public sealed class WaveFunctionTests
     /// GameObject 名。
     /// </param>
     /// <returns>
-    /// 全方向の neighbor 配列が空で初期化された <see cref="Tile"/>。
+    /// neighbor 配列が空の <see cref="Tile"/>。
     /// </returns>
     /// <remarks>
-    /// Caller:
-    /// - 戻り値の GameObject は caller が <see cref="Object.DestroyImmediate(Object)"/> で破棄します。
+    /// 呼び出し側が GameObject を破棄します。
     /// </remarks>
     private static Tile CreateTile(string name)
     {
@@ -143,12 +120,10 @@ public sealed class WaveFunctionTests
     /// テスト用 Cell prefab 相当の GameObject を作る。
     /// </summary>
     /// <returns>
-    /// 新しく作成した GameObject に追加された <see cref="Cell"/>。
+    /// 新しい GameObject 上の <see cref="Cell"/>。
     /// </returns>
     /// <remarks>
-    /// Caller:
-    /// - 戻り値の GameObject は caller が破棄します。
-    /// - 実 prefab asset は作らず、EditMode test 内の一時 GameObject だけを使います。
+    /// 実 prefab asset は作らず、一時 GameObject だけを使います。
     /// </remarks>
     private static Cell CreateCellPrefab()
     {
