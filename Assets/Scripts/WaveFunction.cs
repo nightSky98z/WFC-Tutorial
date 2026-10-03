@@ -780,8 +780,8 @@ public class WaveFunction : MonoBehaviour
 
             if (y > 0)
             {
-                int upIndex = x + (y - 1) * Dimensions;
-                options &= BuildValidMask(CurrentOptions[upIndex], UpMasks);
+                int belowIndex = x + (y - 1) * Dimensions;
+                options &= BuildValidMask(CurrentOptions[belowIndex], UpMasks);
             }
 
             if (x < Dimensions - 1)
@@ -792,8 +792,8 @@ public class WaveFunction : MonoBehaviour
 
             if (y < Dimensions - 1)
             {
-                int downIndex = x + (y + 1) * Dimensions;
-                options &= BuildValidMask(CurrentOptions[downIndex], DownMasks);
+                int aboveIndex = x + (y + 1) * Dimensions;
+                options &= BuildValidMask(CurrentOptions[aboveIndex], DownMasks);
             }
 
             if (x > 0)
